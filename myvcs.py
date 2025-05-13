@@ -23,6 +23,7 @@ def update_index(filepath, hash):
         index_file.write(f"{filepath} {hash}\n")
     
 def add_file(filepath):
+    """Add a file to the staging area."""
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"The file '{filepath}' does not exist.")
     if not os.path.isfile(filepath):
@@ -41,7 +42,7 @@ def add_file(filepath):
     # Update the index with the file path and its hash
     update_index(filepath, hashed_content)
         
-def initialize_vcs():
+def initialize_vcs(author_name, author_email):
     """Initialize the version control system by creating necessary directories and files."""
     try:
         # Check if .myvcs/ already exists
@@ -60,22 +61,37 @@ def initialize_vcs():
                 with open('.myvcs/HEAD', 'w') as head_file:
                     # Create the HEAD file with default branch
                     head_file.write('refs/master\n')
+        with open('.myvcs/config', 'w') as config_file:
+            # Create the config file with author information
+            config_file.write(f"author_name={author_name}\n")
+            config_file.write(f"author_email={author_email}\n")
     except PermissionError:
         print("Error: Permission denied. Please run this script with appropriate permissions.")
     except OSError as e:
         print(f"Error: {e.strerror}. Please check your file system.")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+    
+    
 
+def create_commit(message):
+    staged_files = load_index()
+    
+    if not staged_files:
+        raise ValueError("No files staged for commit.")
+    
+    
+    
 def create_parser():
     """Create and return the command-line argument parser."""
     parser = argparse.ArgumentParser(description="Simple version control system")
     subparsers = parser.add_subparsers(dest="command")
 
     # 'init' command
-    init_parser = subparsers.add_parser("init", help="Initialize the version control system")
-    init_parser.set_defaults(func=initialize_vcs)
-    
+    init_parser = subparsers.add_parser('init', help="Initialize a new version control repository")
+    init_parser.add_argument("author_name", help="Your name (author)")
+    init_parser.add_argument("author_email", help="Your email (author)")
+
     # 'add' command
     add_parser = subparsers.add_parser("add", help="Stage a file for commit")
     add_parser.add_argument("filepath", help="Path to the file to add")
@@ -92,7 +108,7 @@ def main():
     args = parser.parse_args()
     
     if args.command == "init":
-        initialize_vcs()
+        initialize_vcs(args.author_name, args.author_email)
         print("Version control system initialized.")
     elif args.command == "add":
         add_file(args.filepath)
