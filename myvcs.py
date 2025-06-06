@@ -236,7 +236,7 @@ def list_all_files(root_dir=".", ignore_list=None):
             
     return all_paths
 
-def status_check():
+def status_check(log_status=True):
     with open('.myvcs/HEAD','r') as head_file:
         master_path = head_file.read().strip()
     
@@ -249,13 +249,15 @@ def status_check():
     
     with open(os.path.join('.myvcs/objects', master_hash)) as commit_content:
         commit = commit_content.read().strip().splitlines()
-        
-    tree_hash = next((ln for ln in commit if "tree" in ln), None).split()[1]
+    
     if os.path.exists('.myvcsignore'):
         with open('.myvcsignore') as ignore_file:
             ignore_content = ignore_file.read().strip().splitlines()
-            all_files = list_all_files(ignore_list=ignore_content)
-
+    else:
+        ignore_content = None
+    all_files = list_all_files(ignore_list=ignore_content)
+    
+    tree_hash = next((ln for ln in commit if "tree" in ln), None).split()[1]
     with open(os.path.join('.myvcs/objects', tree_hash)) as tree:
         tree = tree.read().strip().splitlines()
 
@@ -301,24 +303,106 @@ def status_check():
         elif status_file[1] == 'untracked':
             status_bulk[3].append(status_file[0]) 
     
-    # print out the status
-    print("Status:")
-    print("modified:\n", end="     ")
-    for file in status_bulk[0]:
-        print(file, end="\n")
-    print()
-    print("unmodified:\n", end="     ")
-    for file in status_bulk[1]:
-        print(file, end="\n")
-    print()
-    print("new:\n", end="     ")
-    for file in status_bulk[2]:
-        print(file, end="\n")
-    print()
-    print("untracked:\n", end="     ")
-    for file in status_bulk[3]:
-        print(file, end="\n")
+    if log_status == True:
+        # print out the status
+        print("Status:")
+        print("modified:\n", end="     ")
+        for file in status_bulk[0]:
+            print(file, end="\n")
+        print()
+        print("unmodified:\n", end="     ")
+        for file in status_bulk[1]:
+            print(file, end="\n")
+        print()
+        print("new:\n", end="     ")
+        for file in status_bulk[2]:
+            print(file, end="\n")
+        print()
+        print("untracked:\n", end="     ")
+        for file in status_bulk[3]:
+            print(file, end="\n")
+    else:
+        return status_bulk
 
+def checkout(commit_hash):
+    def get_user_confirmation(message):
+        while True:
+            response = input(message).strip().lower()
+            if response == 'yes' or response == 'y':
+                break
+            elif response == 'no' or response == 'n':
+                break
+        if response == 'yes' or response == 'y':
+            print('\n')
+            pass
+        elif response == 'no' or response == 'n':
+            raise SystemExit("Checkout aborted.")
+    
+    # [[modified], [unmodified], [new], [untracked]]
+    status = status_check(log_status=False)
+    if status[0] != [] or status[2] != [] or status[3] != []:
+        if status[0] != []:
+            print(f'The following files have been modified\n')
+            for modified_file in status[0]:
+                print(f"{modified_file}\n")
+            message = "These files will be OVERWRITTEN. Do you want to continue? (yes/no)/(y/n): "
+            get_user_confirmation(message)
+            
+        if status[2] != []:
+            print(f'The following files have been added\n')
+            for added_file in status[2]:
+                print(f"{added_file}\n")
+            message = "These files in the staged area will be DELETED. Do you want to continue? (yes/no)/(y/n): "
+            get_user_confirmation(message)
+        
+        if status[3] != []:
+            print(f'The following files have been untracked\n')
+            for untracked_file in status[3]:
+                print(f"{untracked_file}\n")
+            message = "These files will be DELETED. Do you want to continue? (yes/no)(y/n): "
+            get_user_confirmation(message)
+
+    # Get all files in the project, outside the .myvcsignore file
+    if os.path.exists('.myvcsignore'):
+        with open('.myvcsignore') as ignore_file:
+            ignore_content = ignore_file.read().strip().splitlines()
+    else:
+        ignore_content = None
+    all_files = list_all_files(ignore_list=ignore_content)
+    
+    # Remove all files from the project
+    for file in all_files:
+        os.remove(file)
+        folder = os.path.dirname(file)
+        if folder != '':
+            if not os.listdir(folder):
+                os.rmdir(folder)
+    
+    # Get information about the commit about to be restored
+    commit_path = os.path.join('.myvcs/objects',commit_hash)
+    with open(commit_path,'r') as commit_data:
+        lines = commit_data.read().strip().splitlines()
+    for line in lines:
+        line_data = line.strip().split()
+        if line_data[0] == 'tree':
+            tree_hash = line_data[1]
+            tree_path = os.path.join('.myvcs/objects',tree_hash)
+            
+    # Restore the files from the commit
+    with open(tree_path, 'r') as tree_file:
+        tree_data = tree_file.read().strip().splitlines()
+        for line in tree_data:
+            tree_line = line.strip().split()
+            with open(os.path.join('.myvcs\objects',tree_line[0]), 'rb') as hash_file:
+                hash_bytes = hash_file.read()
+            
+            folder = os.path.dirname(tree_line[1])
+            if folder != '':
+                os.makedirs(folder, exist_ok=True)
+            
+            with open(tree_line[1], 'wb') as file:
+                file.write(hash_bytes)
+    
 def create_parser():
     """Create and return the command-line argument parser."""
     parser = argparse.ArgumentParser(description="Simple version control system")
@@ -344,8 +428,12 @@ def create_parser():
     # 'status' command
     subparsers.add_parser("status", help="Show the current status")
     
-    return parser
-
+    # 'checkout' command
+    checkout_parser = subparsers.add_parser("checkout", help="Restore Files from a given commit.")
+    checkout_parser.add_argument("-ch", "--commit_hash", type=str, default=None, help="Use log command to see copy the hash.")
+    
+    return parser  
+    
 def main():
     """Main function to handle the command-line interaction."""
     parser = create_parser()
@@ -362,6 +450,8 @@ def main():
         log_commit(args.number)
     elif args.command == "status":
         status_check()
+    elif args.command == 'checkout':
+        checkout(args.commit_hash)
 
 if __name__ == "__main__":
     main()

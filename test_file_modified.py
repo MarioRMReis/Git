@@ -43,32 +43,7 @@ def log_commit(n_commit):
             
         print("Log commit data:")
         print(commit_data)
-
-def list_all_files(root_dir=".", ignore_list=None):
-    """
-    Return a list of *relative* file paths for everything under root_dir,
-    excluding any files or folders in ignore_list.
     
-    ignore_list: list of folder or file names to ignore (e.g. ['.myvcs', 'temp.txt'])
-    """
-    if ignore_list is None:
-        ignore_list = []
-
-    all_paths = []
-    for dirpath, dirnames, filenames in os.walk(root_dir):
-        # Remove ignored folders from dirnames so os.walk skips them
-        dirnames[:] = [d for d in dirnames if d not in ignore_list]
-
-        for fname in filenames:
-            # Skip ignored files
-            if fname in ignore_list:
-                continue
-
-            full_path = os.path.join(dirpath, fname)
-            rel_path = os.path.relpath(full_path, root_dir)
-            all_paths.append(rel_path)
-    return all_paths
-
 if __name__ == "__main__":
 
     commit_data = """tree 355f4349419e523a9b254e4b13ebb98fff5dc363
@@ -77,8 +52,6 @@ if __name__ == "__main__":
                 message First commit
             """
     
-    ignore_list = ['.myvcs', '.git', 'myvcs.py', 'myvcs.py', '.vscode', '.myvcsignore']
-    all_files = list_all_files(ignore_list=ignore_list)
-    print(all_files)
-    
-            
+    lines = commit_data.split('\n')
+    for line in lines:
+        print(line.strip().split())
