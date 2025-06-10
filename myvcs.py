@@ -324,7 +324,7 @@ def status_check(log_status=True):
     else:
         return status_bulk
 
-def checkout(commit_hash):
+def checkout(commit, force):
     def get_user_confirmation(message):
         while True:
             response = input(message).strip().lower()
@@ -338,29 +338,31 @@ def checkout(commit_hash):
         elif response == 'no' or response == 'n':
             raise SystemExit("Checkout aborted.")
     
-    # [[modified], [unmodified], [new], [untracked]]
-    status = status_check(log_status=False)
-    if status[0] != [] or status[2] != [] or status[3] != []:
-        if status[0] != []:
-            print(f'The following files have been modified\n')
-            for modified_file in status[0]:
-                print(f"{modified_file}\n")
-            message = "These files will be OVERWRITTEN. Do you want to continue? (yes/no)/(y/n): "
-            get_user_confirmation(message)
+    # If force is True skips the warnings
+    if not force:
+        # [[modified], [unmodified], [new], [untracked]]
+        status = status_check(log_status=False)
+        if status[0] != [] or status[2] != [] or status[3] != []:
+            if status[0] != []:
+                print(f'The following files have been modified\n')
+                for modified_file in status[0]:
+                    print(f"{modified_file}\n")
+                message = "These files will be OVERWRITTEN. Do you want to continue? (yes/no)/(y/n): "
+                get_user_confirmation(message)
+                
+            if status[2] != []:
+                print(f'The following files have been added\n')
+                for added_file in status[2]:
+                    print(f"{added_file}\n")
+                message = "These files in the staged area will be DELETED. Do you want to continue? (yes/no)/(y/n): "
+                get_user_confirmation(message)
             
-        if status[2] != []:
-            print(f'The following files have been added\n')
-            for added_file in status[2]:
-                print(f"{added_file}\n")
-            message = "These files in the staged area will be DELETED. Do you want to continue? (yes/no)/(y/n): "
-            get_user_confirmation(message)
-        
-        if status[3] != []:
-            print(f'The following files have been untracked\n')
-            for untracked_file in status[3]:
-                print(f"{untracked_file}\n")
-            message = "These files will be DELETED. Do you want to continue? (yes/no)(y/n): "
-            get_user_confirmation(message)
+            if status[3] != []:
+                print(f'The following files have been untracked\n')
+                for untracked_file in status[3]:
+                    print(f"{untracked_file}\n")
+                message = "These files will be DELETED. Do you want to continue? (yes/no)(y/n): "
+                get_user_confirmation(message)
 
     # Get all files in the project, outside the .myvcsignore file
     if os.path.exists('.myvcsignore'):
@@ -377,9 +379,34 @@ def checkout(commit_hash):
         if folder != '':
             if not os.listdir(folder):
                 os.rmdir(folder)
-    
+                
+    if os.path.exists('.myvcs/refs/tags'):
+        tags = os.listdir('.myvcs/refs/tags')
+
+    # If master was selected changes the commit_hash to the hash of the current master
+    if commit == 'master':
+        head_path = ".myvcs/HEAD"
+        # Check if HEAD file exists
+        if not os.path.exists(head_path):
+            raise FileNotFoundError(f"The HEAD file does not exist.")
+        with open(head_path, 'r') as head:
+            head_path_data = head.read().strip()
+        # Check if master exists
+        if not os.path.exists(os.path.join('.myvcs', head_path_data)):
+            raise FileNotFoundError(f"The HEAD file '{head_path_data}' does not exist.")
+        # Master path is the contents of head_date
+        master_path = os.path.join('.myvcs', head_path_data)
+        # Read the master file and get the commit hash
+        with open(master_path, 'r') as master:
+            commit = master.read().strip()
+            
+    elif commit in tags:
+        tag_path = os.path.join('.myvcs/refs/tags',commit)
+        with open(tag_path,'r') as tag:
+            commit =tag.read().strip()
+            
     # Get information about the commit about to be restored
-    commit_path = os.path.join('.myvcs/objects',commit_hash)
+    commit_path = os.path.join('.myvcs/objects',commit)
     with open(commit_path,'r') as commit_data:
         lines = commit_data.read().strip().splitlines()
     for line in lines:
@@ -396,13 +423,39 @@ def checkout(commit_hash):
             with open(os.path.join('.myvcs\objects',tree_line[0]), 'rb') as hash_file:
                 hash_bytes = hash_file.read()
             
+            # Make sure the folder exists before creating the file
             folder = os.path.dirname(tree_line[1])
             if folder != '':
                 os.makedirs(folder, exist_ok=True)
             
             with open(tree_line[1], 'wb') as file:
                 file.write(hash_bytes)
+
+def add_tag(tag_name):
+    os.makedirs('.myvcs/refs/tags', exist_ok=True)
+    tags = os.listdir('.myvcs/refs/tags')
     
+    # Invalid tag name check
+    if '/' in tag_name or tag_name == '':
+        raise ValueError("Invalid tag name.")
+    
+    if tag_name in tags:
+        raise ValueError(f"Tag '{tag_name}' already exists.")
+    
+    with open('.myvcs/HEAD', 'r') as head:
+        head_path = head.read().strip()
+    if head_path == '':
+        raise ValueError('HEAD file is empty.')
+    
+    with open(os.path.join('.myvcs', head_path), 'r') as master:
+        master_hash = master.read().strip()
+    
+    with open('.myvcs/refs/tags/' + tag_name, 'w') as tag:
+        tag.write(master_hash)
+    
+    print(f'Tag created successfully. Tag: {tag_name}')
+        
+        
 def create_parser():
     """Create and return the command-line argument parser."""
     parser = argparse.ArgumentParser(description="Simple version control system")
@@ -415,7 +468,7 @@ def create_parser():
 
     # 'add' command
     add_parser = subparsers.add_parser("add", help="Stage a file for commit")
-    add_parser.add_argument("filepath", help="Path to the file to add")
+    add_parser.add_argument("filepath", help="Path to the file to add") 
 
     # 'commit' command
     commit_parser = subparsers.add_parser("commit", help="Commit staged files")
@@ -431,6 +484,11 @@ def create_parser():
     # 'checkout' command
     checkout_parser = subparsers.add_parser("checkout", help="Restore Files from a given commit.")
     checkout_parser.add_argument("-ch", "--commit_hash", type=str, default=None, help="Use log command to see copy the hash.")
+    checkout_parser.add_argument("-f", "--force", action='store_true', help="Force checkout.")
+    
+    # 'tag' command
+    tag_parser = subparsers.add_parser("tag", help="Add a tag to the current commit.")
+    tag_parser.add_argument("-tn", "--tag_name", type=str, default=None, help="Name of the tag.") 
     
     return parser  
     
@@ -451,7 +509,9 @@ def main():
     elif args.command == "status":
         status_check()
     elif args.command == 'checkout':
-        checkout(args.commit_hash)
-
+        checkout(args.commit_hash, args.force)
+    elif args.command == 'tag':
+        add_tag(args.tag_name)
+        
 if __name__ == "__main__":
     main()
