@@ -457,33 +457,58 @@ def add_tag(tag_name):
     print(f'Tag created successfully. Tag: {tag_name}')
 
 
-def branch(name, list_flag, delete, switch, merge):
+def branch(name, list_flag, delete, switch, merge, into):
     """[name:Str, list_flag:bool, delete:str, switch:str, merge:str]"""
     os.makedirs('.myvcs/refs/branches', exist_ok=True)
 
     def branch_create(branch_name_create):
-        with open('.myvcs/refs/branches/main', 'r') as main:
+        with open('.myvcs/HEAD', 'r') as head:
+            current_head = head.read().strip()  
+            
+        with open(f'.myvcs/refs/branches/{current_head}', 'r') as main:
             main_hash = main.read().strip()
         with open(f'.myvcs/refs/branches/{branch_name_create}', 'w') as new_branch:
             new_branch.write(main_hash)
         with open('.myvcs/HEAD', 'w') as head:
             head.write(f'.myvcs/refs/branches/{branch_name_create}')    
-        print('Branch created successfully. Branch: {branch_name}')
+        print(f'From {current_head}, branch {branch_name_create} was created successfully.')
         
     def branch_list():
         print('Branches:')
-        branches = os.listdir('.myvcs/refs/heads')
+        branches = os.listdir('.myvcs/refs/branches')
         for branch in branches:
             print('     ' + branch)
             
     def branch_delete(branch_name_delete):
-        print('Branch deleted successfully.')
+        if os.path.exists(f'.myvcs/refs/branches/{branch_name_delete}'):
+            os.remove(f'.myvcs/refs/branches/{branch_name_delete}')
+            with open('.myvcs/HEAD', 'w') as head:
+                head.write('.myvcs/refs/branches/main') 
+        else:
+            raise ValueError(f'The given branch does not exist.{branch_name_delete}')
+        
+        print(f'Branch {branch_name_delete} deleted successfully.')
     
     def branch_switch(branch_name_switch):
-        print('Switched to branch: {branch_name}')
+        if os.path.exists(f'.myvcs/refs/branches/{branch_name_switch}'):
+            with open('.myvcs/HEAD', 'w') as head:
+                head.write(f'.myvcs/refs/branches/{branch_name_switch}') 
+        else:
+            raise ValueError(f'The given branch does not exist.{branch_name_switch}')
+        print(f'Switched to branch: {branch_name_switch}')
     
-    def branch_merge(branch_name_merge):        
-        print('Merged successfully.')
+    def branch_merge(branch_name_merge, branch_into):
+        if not os.path.exists(f'.myvcs/refs/branches/{branch_name_merge}'):
+            raise ValueError(f'The given branch does not exist.{branch_name_merge}')
+        if not os.path.exists(f'.myvcs/refs/branches/{branch_into}'):
+            raise ValueError(f'The given branch does not exist.{branch_into}')
+        
+        with open(f'.myvcs/refs/branches/{branch_name_merge}', 'r') as merge:
+            hash_merge = merge.read().strip()
+        with open(f'.myvcs/refs/branches/{branch_into}', 'w') as into:
+            into.write(hash_merge)
+        
+        print(f"Branch '{branch_name_merge}' merged into '{branch_into}' successfully.")
         
     if name != None:
         branch_create(name)
@@ -492,7 +517,7 @@ def branch(name, list_flag, delete, switch, merge):
     elif switch != None:
         branch_switch(switch)
     elif merge != None:
-        branch_merge(merge)
+        branch_merge(merge, into)
     elif list_flag:
         branch_list()
     else:
@@ -539,7 +564,7 @@ def create_parser():
     branch_parser.add_argument("-d", "--delete", type=str, default=None, help="Deletes the branch with the given name, if exists.")
     branch_parser.add_argument("-ch","--change_branch", type=str, default=None, help="Changes from the current brange to the given branch.")
     branch_parser.add_argument("-m","--merge", type=str, default=None, help="Merges the current branch with the given branch")
-    
+    branch_parser.add_argument("-i", "--into", type=str, default='main', help="The default merge will be MAIN, but you can pick another branch to merge into.")
     return parser  
     
 def func_main():
@@ -563,7 +588,7 @@ def func_main():
     elif args.command == 'tag':
         add_tag(args.tag_name)
     elif args.command == 'branch':
-        branch(args.name, args.list, args.delete, args.change_branch, args.merge)
+        branch(args.name, args.list, args.delete, args.change_branch, args.merge, args.into)
     else:
         print("Invalid command. Use 'help' for a list of commands.")
         
