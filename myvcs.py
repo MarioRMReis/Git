@@ -25,22 +25,22 @@ def log_commit(n_commit):
     with open(head_path, 'r') as head:
         head_path_data = head.read().strip()
         
-    # Chech if the HEAD file contains the path to the master  
+    # Chech if the HEAD file contains the path to the main  
     if head_path_data == '':
         raise ValueError(f"The HEAD file is empty.")
     
-    # Check if master exists
+    # Check if main exists
     if not os.path.exists(os.path.join('.myvcs', head_path_data)):
         raise FileNotFoundError(f"The HEAD file '{head_path_data}' does not exist.")
 
-    # Master path is the contents of head_date
-    master_path = os.path.join('.myvcs', head_path_data)
-    if not os.path.exists(master_path):
-        raise FileNotFoundError(f"The master file '{master_path}' does not exist.")
+    # Main path is the contents of head_date
+    main_path = os.path.join('.myvcs', head_path_data)
+    if not os.path.exists(main_path):
+        raise FileNotFoundError(f"The main file '{main_path}' does not exist.")
     
-    # Read the master file and get the commit hash
-    with open(master_path, 'r') as master:
-        hash_path = master.read().strip()
+    # Read the main file and get the commit hash
+    with open(main_path, 'r') as main:
+        hash_path = main.read().strip()
 
     for i in range(n_commit):
         # Parent flag initiated as False in each iteration of the loop, idicates the existance of a previous commit
@@ -122,9 +122,10 @@ def initialize_vcs(author_name, author_email):
             # If not, create the directory structure
             os.makedirs('.myvcs/objects', exist_ok=True)
             os.makedirs('.myvcs/refs', exist_ok=True)
+            os.makedirs('.myvcs/refs/branches')
             with open('.myvcs/HEAD', 'w') as head_file:
                 # Create the HEAD file with default branch
-                head_file.write('refs/master\n')
+                head_file.write('refs/branches/main\n')
         else:
             # In case the directory exists, we can check if the necessary subdirectories and files exist and create them if they don't
             os.makedirs('.myvcs/objects', exist_ok=True)
@@ -132,7 +133,7 @@ def initialize_vcs(author_name, author_email):
             if not os.path.exists('.myvcs/HEAD'):
                 with open('.myvcs/HEAD', 'w') as head_file:
                     # Create the HEAD file with default branch
-                    head_file.write('refs/master\n')
+                    head_file.write('refs/branches/main\n')
         with open('.myvcs/config', 'w') as config_file:
             # Create the config file with author information
             config_file.write(f"author_name={author_name}\n")
@@ -171,7 +172,7 @@ def create_commit(message):
     aurhor_name, author_email = author_info()
     
     timestamp = int(time.time())
-    if not os.path.exists('.myvcs/refs/master') or os.path.getsize('.myvcs/refs/master') == 0:
+    if not os.path.exists('.myvcs/refs/branches/main') or os.path.getsize('.myvcs/refs/branches/main') == 0:
         commit_content = f"""
                 tree {tree_hash}
                 author {aurhor_name} <{author_email}> 
@@ -179,13 +180,13 @@ def create_commit(message):
                 message {message}
             """
     else:
-        # Get the hash of the previous commit (in refs/master)
-        with open('.myvcs/refs/master', 'r') as master:
-            master_hash = master.read().strip()
+        # Get the hash of the previous commit (in refs/main)
+        with open('.myvcs/refs/branches/main', 'r') as main:
+            main_hash = main.read().strip()
         # Commit content with the previous commit's hash
         commit_content = f"""
             tree {tree_hash}
-            parent {master_hash}
+            parent {main_hash}
             author {aurhor_name} <{author_email}> 
             timestamp {timestamp}
             message {message}
@@ -197,8 +198,8 @@ def create_commit(message):
     with open(commit_path, 'w') as commit_file:
         commit_file.write(commit_content)
         
-    # Update HEAD to point to the new commit (in refs/master)
-    with open('.myvcs/refs/master', 'w') as ref_file:
+    # Update HEAD to point to the new commit (in refs/main)
+    with open('.myvcs/refs/branches/main', 'w') as ref_file:
         ref_file.write(commit_hash)
 
     # Clear the index after commit
@@ -216,7 +217,7 @@ def list_all_files(root_dir=".", ignore_list=None):
     
     ignore_list: list of folder or file names to ignore (e.g. ['.myvcs', 'temp.txt'])
     """
-    ignore_list.extend(['.myvcs', '.git', 'myvcs.py', 'myvcs.py', '.myvcsignore'])
+    ignore_list.extend(['.myvcs', '.git', 'myvcs.py', '.myvcsignore', '.vscode'])
     if ignore_list is None:
         ignore_list = []
 
@@ -238,16 +239,16 @@ def list_all_files(root_dir=".", ignore_list=None):
 
 def status_check(log_status=True):
     with open('.myvcs/HEAD','r') as head_file:
-        master_path = head_file.read().strip()
+        main_path = head_file.read().strip()
     
-    if master_path == '':
+    if main_path == '':
         print('No commits yet!')
         return
     else:
-        with open(os.path.join('.myvcs', master_path), 'r') as master_file:
-            master_hash = master_file.read().lstrip()
+        with open(os.path.join('.myvcs', main_path), 'r') as main_file:
+            main_hash = main_file.read().lstrip()
     
-    with open(os.path.join('.myvcs/objects', master_hash)) as commit_content:
+    with open(os.path.join('.myvcs/objects', main_hash)) as commit_content:
         commit = commit_content.read().strip().splitlines()
     
     if os.path.exists('.myvcsignore'):
@@ -383,22 +384,22 @@ def checkout(commit, force):
     if os.path.exists('.myvcs/refs/tags'):
         tags = os.listdir('.myvcs/refs/tags')
 
-    # If master was selected changes the commit_hash to the hash of the current master
-    if commit == 'master':
+    # If main was selected changes the commit_hash to the hash of the current main
+    if commit == 'main':
         head_path = ".myvcs/HEAD"
         # Check if HEAD file exists
         if not os.path.exists(head_path):
             raise FileNotFoundError(f"The HEAD file does not exist.")
         with open(head_path, 'r') as head:
             head_path_data = head.read().strip()
-        # Check if master exists
+        # Check if main exists
         if not os.path.exists(os.path.join('.myvcs', head_path_data)):
             raise FileNotFoundError(f"The HEAD file '{head_path_data}' does not exist.")
-        # Master path is the contents of head_date
-        master_path = os.path.join('.myvcs', head_path_data)
-        # Read the master file and get the commit hash
-        with open(master_path, 'r') as master:
-            commit = master.read().strip()
+        # main path is the contents of head_date
+        main_path = os.path.join('.myvcs', head_path_data)
+        # Read the main file and get the commit hash
+        with open(main_path, 'r') as main:
+            commit = main.read().strip()
             
     elif commit in tags:
         tag_path = os.path.join('.myvcs/refs/tags',commit)
@@ -447,15 +448,48 @@ def add_tag(tag_name):
     if head_path == '':
         raise ValueError('HEAD file is empty.')
     
-    with open(os.path.join('.myvcs', head_path), 'r') as master:
-        master_hash = master.read().strip()
+    with open(os.path.join('.myvcs', head_path), 'r') as main:
+        main_hash = main.read().strip()
     
     with open('.myvcs/refs/tags/' + tag_name, 'w') as tag:
-        tag.write(master_hash)
+        tag.write(main_hash)
     
     print(f'Tag created successfully. Tag: {tag_name}')
+
+def branch(name, list_flag, delete, switch, merge):
+    os.makedirs('.myvcs/refs/branches', exist_ok=True)
+
+    def branch_create(branch_name_create):
+        print('Branch created successfully. Branch: {branch_name}')
         
+    def branch_list():
+        print('Branches:')
+        branches = os.listdir('.myvcs/refs/heads')
+        for branch in branches:
+            print('     ' + branch)
+            
+    def branch_delete(branch_name_delete):
+        print('Branch deleted successfully.')
+    
+    def branch_switch(branch_name_switch):
+        print('Switched to branch: {branch_name}')
+    
+    def branch_merge(branch_name_merge):        
+        print('Merged successfully.')
         
+    if name != None:
+        branch_create(name)
+    elif delete != None:
+        branch_delete(delete)
+    elif switch != None:
+        branch_switch(switch)
+    elif merge != None:
+        branch_merge(merge)
+    elif list_flag:
+        branch_list()
+    else:
+        raise ValueError("Invalid command.")
+    
 def create_parser():
     """Create and return the command-line argument parser."""
     parser = argparse.ArgumentParser(description="Simple version control system")
@@ -463,8 +497,8 @@ def create_parser():
 
     # 'init' command
     init_parser = subparsers.add_parser('init', help="Initialize a new version control repository")
-    init_parser.add_argument("author_name", help="Your name (author)")
-    init_parser.add_argument("author_email", help="Your email (author)")
+    init_parser.add_argument("-n", "--author_name", help="Your name (author)")
+    init_parser.add_argument("-e","--author_email", help="Your email (author)")
 
     # 'add' command
     add_parser = subparsers.add_parser("add", help="Stage a file for commit")
@@ -490,28 +524,40 @@ def create_parser():
     tag_parser = subparsers.add_parser("tag", help="Add a tag to the current commit.")
     tag_parser.add_argument("-tn", "--tag_name", type=str, default=None, help="Name of the tag.") 
     
+    # 'branch' command
+    branch_parser = subparsers.add_parser("branch", help="")
+    branch_parser.add_argument("-b", "--name", type=str, default=None, help="Creates a new branch with the given name.")
+    branch_parser.add_argument("-l", "--list", default=None, help="Lists all the branches.", action='store_true')
+    branch_parser.add_argument("-d", "--delete", type=str, default=None, help="Deletes the branch with the given name, if exists.")
+    branch_parser.add_argument("-ch","--change_branch", type=str, default=None, help="Changes from the current brange to the given branch.")
+    branch_parser.add_argument("-m","--merge", type=str, default=None, help="Merges the current branch with the given branch")
+    
     return parser  
     
-def main():
+def func_main():
     """Main function to handle the command-line interaction."""
     parser = create_parser()
     args = parser.parse_args()
     
-    if args.command == "init":
+    if args.command == 'init':
         initialize_vcs(args.author_name, args.author_email)
         print("Version control system initialized.")
-    elif args.command == "add":
+    elif args.command == 'add':
         add_file(args.filepath)
-    elif args.command == "commit":
+    elif args.command == 'commit':
         create_commit(args.message)
-    elif args.command == "log":
+    elif args.command == 'log':
         log_commit(args.number)
-    elif args.command == "status":
+    elif args.command == 'status':
         status_check()
     elif args.command == 'checkout':
         checkout(args.commit_hash, args.force)
     elif args.command == 'tag':
         add_tag(args.tag_name)
+    elif args.command == 'branch':
+        branch(args.name, args.list, args.delete, args.change_branch, args.merge)
+    else:
+        print("Invalid command. Use 'help' for a list of commands.")
         
 if __name__ == "__main__":
-    main()
+    func_main()
