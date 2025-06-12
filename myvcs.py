@@ -456,10 +456,18 @@ def add_tag(tag_name):
     
     print(f'Tag created successfully. Tag: {tag_name}')
 
+
 def branch(name, list_flag, delete, switch, merge):
+    """[name:Str, list_flag:bool, delete:str, switch:str, merge:str]"""
     os.makedirs('.myvcs/refs/branches', exist_ok=True)
 
     def branch_create(branch_name_create):
+        with open('.myvcs/refs/branches/main', 'r') as main:
+            main_hash = main.read().strip()
+        with open(f'.myvcs/refs/branches/{branch_name_create}', 'w') as new_branch:
+            new_branch.write(main_hash)
+        with open('.myvcs/HEAD', 'w') as head:
+            head.write(f'.myvcs/refs/branches/{branch_name_create}')    
         print('Branch created successfully. Branch: {branch_name}')
         
     def branch_list():
@@ -526,7 +534,7 @@ def create_parser():
     
     # 'branch' command
     branch_parser = subparsers.add_parser("branch", help="")
-    branch_parser.add_argument("-b", "--name", type=str, default=None, help="Creates a new branch with the given name.")
+    branch_parser.add_argument("-cb", "--name", type=str, default=None, help="Creates a new branch with the given name.")
     branch_parser.add_argument("-l", "--list", default=None, help="Lists all the branches.", action='store_true')
     branch_parser.add_argument("-d", "--delete", type=str, default=None, help="Deletes the branch with the given name, if exists.")
     branch_parser.add_argument("-ch","--change_branch", type=str, default=None, help="Changes from the current brange to the given branch.")
